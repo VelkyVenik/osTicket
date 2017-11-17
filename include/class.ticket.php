@@ -510,7 +510,7 @@ implements RestrictedAccess, Threadable {
         return true;
     }
 
-    // VSL: Get correct Grace period, TODO: implement NBD, fix type recognition
+    // VSL: Get correct Grace period, TODO: implement NBD
     function getSLAGracePeriod() {
         $slaGracePeriods = [
             [ // Gold
@@ -531,7 +531,8 @@ implements RestrictedAccess, Threadable {
         ];
         $priority = $this->getPriority();
         $sla = $this->getSLA()->getName();
-        if (!$this->getAssignee())
+
+        if ($this->getNumResponses() == 0)
             $typeId = 0;
         else
             $typeId = 1;
@@ -575,7 +576,7 @@ implements RestrictedAccess, Threadable {
             if ($gracePeriod == -1)
                 $gracePeriod = 'n/a';
 
-            if (!$this->getAssignee())
+            if ($this->getNumResponses() == 0)
                 $type = "First Response";
             else
                 $type = "Incident Resolution";
@@ -587,6 +588,8 @@ implements RestrictedAccess, Threadable {
     }
 
     // VSL: exclude non working hours and days from SLA deadline
+    // TODO: use est_duedate from DB if exists - after update do 0.10.1
+    // TODO: exclude customer waiting time
     function getSLADueDate() {
         if ($sla = $this->getSLA()) {
           $dt = new DateTime($this->getCreateDate());
