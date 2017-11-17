@@ -488,13 +488,154 @@ implements RestrictedAccess, Threadable {
         return $this->duedate;
     }
 
+    function isWorkingDay($d) {
+        $dueDayOfWeek = $d->format('w');
+        $day = $d->format('d');
+        $month = $d->format('m');
+
+        if ($dueDayOfWeek == 6)
+          return false;
+
+        if ($dueDayOfWeek == 0)
+          return false;
+
+        if ($day == 17 and $month == 11)
+          return false;
+        if ($month == 12 and ($day == 24 or $day == 25 or $day == 26 or $day == 31))
+          return false;
+
+        if ($month == 1 and ($day == 1))
+          return false;
+
+        return true;
+    }
+
+    // VSL: Get correct Grace period, TODO: implement NBD, fix type recognition
+    function getSLAGracePeriod() {
+        $slaGracePeriods = [
+            [ // Gold
+                [4, 4, 8], // First Response
+                [8, 8, -1], // Incident Resolution
+                [30*8, 60*8, -1] // Defect Resolution
+            ], // Gold
+            [ // Silver
+                [8, 8, 5*8], // First Response
+                [3*8, 10*8, -1], // Incident Resolution
+                [30*8, 60*8, -1] // Defect Resolution
+            ], // Silver
+            [ // Basic
+                [5*8, 10*8, 15*8], // First Response
+                [60*8, -1, -1], // Incident Resolution
+                [120*8, -1, -1] // Defect Resolution
+            ] // Basic
+        ];
+        $priority = $this->getPriority();
+        $sla = $this->getSLA()->getName();
+        if (!$this->getAssignee())
+            $typeId = 0;
+        else
+            $typeId = 1;
+
+        switch ($priority) {
+            case 'Critical':
+                $priorityId = 0;
+                break;
+
+            case 'Major':
+                $priorityId = 1;
+                break;
+
+            default:
+                $priorityId = 2;
+                break;
+        }
+
+        switch ($sla) {
+            case 'Gold SLA':
+                $slaId = 0;
+                break;
+
+            case 'Silver SLA':
+                $slaId = 1;
+                break;
+
+            default:
+                $slaId = 2;
+                break;
+        }
+
+        return $slaGracePeriods[$slaId][$typeId][$priorityId];
+    }
+
+    // VLS: more information about SLA, used in ticket-view.inc.php
+    function getSLADesc() {
+        if ($sla = $this->getSLA()) {
+            $priority = $this->getPriority();
+            $gracePeriod = $this->getSLAGracePeriod();
+            if ($gracePeriod == -1)
+                $gracePeriod = 'n/a';
+
+            if (!$this->getAssignee())
+                $type = "First Response";
+            else
+                $type = "Incident Resolution";
+
+            return " - $type, $priority ($gracePeriod h)";
+        } else {
+            return "";
+        }
+    }
+
+    // VSL: exclude non working hours and days from SLA deadline
     function getSLADueDate() {
         if ($sla = $this->getSLA()) {
-            $dt = new DateTime($this->getCreateDate());
+          $dt = new DateTime($this->getCreateDate());
 
-            return $dt
-                ->add(new DateInterval('PT' . $sla->getGracePeriod() . 'H'))
-                ->format('Y-m-d H:i:s');
+          $workStart = [8,30]; $workStartMinutes = $workStart[0]*60 + $workStart[1];
+          $workEnd = [16,30]; $workEndMinutes = $workEnd[0]*60 + $workEnd[1];
+
+          $gracePeriodHours = $this->getSLAGracePeriod();
+          if ($gracePeriodHours == -1)
+              return;
+
+          $addMinutes = $gracePeriodHours * 60;
+
+          $i = 1;
+          while($addMinutes > 0) {
+              // echo "Loop $i: " . $dt->format('Y-m-d H:i:s') . ", $addMinutes\n<br>";$i++;
+              $minutes = $dt->format('H') * 60  + $dt->format('i');
+
+              // Skip non working day or hours to  day morning
+              if (!$this->isWorkingDay($dt) or $minutes >= $workEndMinutes) {
+                  // echo "Non Working Day or Hour" . "\n<br>";
+                  $dt->add(new DateInterval('P1D'));
+                  $dt->setTime($workStart[0], $workStart[1]);
+                  continue;
+              }
+
+              // skip to todays morning
+              if ($minutes < $workStartMinutes) {
+                  // echo "Non Working Hour" . "\n<br>";
+                  $minutes = $dt->setTime($workStart[0], $workStart[1]);
+                  continue;
+              }
+
+              // Ho many minutes can I use today
+              $minutesToday = $workEndMinutes - $minutes;
+
+              if ($minutes + $addMinutes > $workEndMinutes) {
+                  $addMinutes -= $minutesToday;
+                  $dt->setTime($workEnd[0], $workEnd[1]);
+              } else {
+                  $dt->add(new DateInterval('PT'. $addMinutes . 'M'));
+                  $addMinutes = 0;
+              }
+          }
+
+          // TODO: save only if differs
+          $this->est_duedate = $dt->format('Y-m-d H:i:s');
+          $this->save();
+          return $this->est_duedate;
         }
     }
 
@@ -3647,13 +3788,23 @@ implements RestrictedAccess, Threadable {
          Punt for now
          */
 
+        // VSL: just compare est_duedate, no magic here.
+        // $sql='SELECT ticket_id FROM '.TICKET_TABLE.' T1 '
+        //     .' INNER JOIN '.TICKET_STATUS_TABLE.' status
+        //         ON (status.id=T1.status_id AND status.state="open") '
+        //     .' LEFT JOIN '.SLA_TABLE.' T2 ON (T1.sla_id=T2.id AND T2.flags & 1 = 1) '
+        //     .' WHERE isoverdue=0 '
+        //     .' AND ((reopened is NULL AND duedate is NULL AND TIME_TO_SEC(TIMEDIFF(NOW(),T1.created))>=T2.grace_period*3600) '
+        //     .' OR (reopened is NOT NULL AND duedate is NULL AND TIME_TO_SEC(TIMEDIFF(NOW(),reopened))>=T2.grace_period*3600) '
+        //     .' OR (duedate is NOT NULL AND duedate<NOW()) '
+        //     .' ) ORDER BY T1.created LIMIT 50'; //Age upto 50 tickets at a time?
+
         $sql='SELECT ticket_id FROM '.TICKET_TABLE.' T1 '
             .' INNER JOIN '.TICKET_STATUS_TABLE.' status
                 ON (status.id=T1.status_id AND status.state="open") '
             .' LEFT JOIN '.SLA_TABLE.' T2 ON (T1.sla_id=T2.id AND T2.flags & 1 = 1) '
             .' WHERE isoverdue=0 '
-            .' AND ((reopened is NULL AND duedate is NULL AND TIME_TO_SEC(TIMEDIFF(NOW(),T1.created))>=T2.grace_period*3600) '
-            .' OR (reopened is NOT NULL AND duedate is NULL AND TIME_TO_SEC(TIMEDIFF(NOW(),reopened))>=T2.grace_period*3600) '
+            .' AND ((duedate is NULL AND est_duedate is NOT NULL AND est_duedate<NOW()) '
             .' OR (duedate is NOT NULL AND duedate<NOW()) '
             .' ) ORDER BY T1.created LIMIT 50'; //Age upto 50 tickets at a time?
 
