@@ -587,9 +587,101 @@ implements RestrictedAccess, Threadable {
         }
     }
 
+    // TODO: refactor get_working_hours function
+    // TODO: add skipdates and test it.
+    function getCustomerWaitingTime() {
+        function get_working_hours($ini_str,$end_str){
+            // echo "$ini_str -> $end_str<br>";
+            //config
+            $ini_time = [8,30]; //hr, min
+            $end_time = [16,30]; //hr, min
+            //date objects
+            $ini = date_create($ini_str);
+            $ini_wk = date_time_set(date_create($ini_str),$ini_time[0],$ini_time[1]);
+            $end = date_create($end_str);
+            $end_wk = date_time_set(date_create($end_str),$end_time[0],$end_time[1]);
+            //days
+            $workdays_arr = get_workdays($ini,$end);
+            $workdays_count = count($workdays_arr);
+            $workday_seconds = (($end_time[0] * 60 + $end_time[1]) - ($ini_time[0] * 60 + $ini_time[1])) * 60;
+            //get time difference
+            $ini_seconds = 0;
+            $end_seconds = 0;
+            if(in_array($ini->format('Y-m-d'),$workdays_arr)) $ini_seconds = $ini->format('U') - $ini_wk->format('U');
+            if(in_array($end->format('Y-m-d'),$workdays_arr)) $end_seconds = $end_wk->format('U') - $end->format('U');
+            $seconds_dif = $ini_seconds > 0 ? $ini_seconds : 0;
+            if($end_seconds > 0 and $end_seconds < $workday_seconds) $seconds_dif += $end_seconds;
+            if($end_seconds > $workday_seconds) $seconds_dif += $workday_seconds;
+            //final calculations
+            $working_seconds = ($workdays_count * $workday_seconds) - $seconds_dif;
+            // echo $ini_str.' - '.$end_str.'; Working Hours:'.($working_seconds / 3600);
+            return $working_seconds / 60; //return minutes
+        }
+
+        function get_workdays($ini,$end){
+            //config
+            $skipdays = [6,0]; //saturday:6; sunday:0
+            $skipdates = []; //eg: ['2016-10-10'];
+            //vars
+            $current = clone $ini;
+            $current_disp = $current->format('Y-m-d');
+            $end_disp = $end->format('Y-m-d');
+            $days_arr = [];
+            //days range
+            while($current_disp <= $end_disp){
+                if(!in_array($current->format('w'),$skipdays) && !in_array($current_disp,$skipdates)){
+                    $days_arr[] = $current_disp;
+                }
+                $current->add(new DateInterval('P1D')); //adds one day
+                $current_disp = $current->format('Y-m-d');
+            }
+            // echo "<br>" . print_r($days_arr) . "<br>";
+            return $days_arr;
+        }
+
+        $customerWaitingTime = 0;
+        $date = $datePrevious = NULL;
+        foreach($this->getClientThread() as $activity) {
+          $type = $activity->getType();
+          $date = new DateTime($activity->getCreateDate());
+
+          // echo "- " . $date->format('Y-m-d H:i:s') . " - " . $type . " <br> ";
+
+          // Remember first last response
+          if ($type == 'R') {
+            if (!$datePrevious)
+              $datePrevious = $date;
+            continue;
+          }
+
+          // No response yet
+          if (!$datePrevious) {
+            continue;
+          }
+
+          // Unknown activity
+          if ($type != "M") {
+            continue;
+          }
+
+          $waitingTime = get_working_hours($datePrevious->format('Y-m-d H:i:s'), $date->format('Y-m-d H:i:s'));
+          // echo "$waitingTime / " . $date->diff($datePrevious)->format('%H:%i:%s') . "<br>";
+          $customerWaitingTime += $waitingTime;
+
+          $datePrevious = NULL;
+        }
+        if ($type == "R") {
+            $now = new DateTime();
+            $waitingTime = get_working_hours($date->format('Y-m-d H:i:s'), $now->format('Y-m-d H:i:s'));
+            // echo "$waitingTime / " . $now->diff($datePrevious)->format('%H:%i:%s') . "<br>";
+            $customerWaitingTime += $waitingTime;
+        }
+
+        return $customerWaitingTime;
+    }
+
     // VSL: exclude non working hours and days from SLA deadline
     // TODO: use est_duedate from DB if exists - after update do 0.10.1
-    // TODO: exclude customer waiting time
     function getSLADueDate() {
         if ($sla = $this->getSLA()) {
           $dt = new DateTime($this->getCreateDate());
@@ -597,7 +689,7 @@ implements RestrictedAccess, Threadable {
           $workStart = [8,30]; $workStartMinutes = $workStart[0]*60 + $workStart[1];
           $workEnd = [16,30]; $workEndMinutes = $workEnd[0]*60 + $workEnd[1];
 
-          $gracePeriodHours = $this->getSLAGracePeriod();
+          $gracePeriodHours = $this->getSLAGracePeriod() + $this->getCustomerWaitingTime();
           if ($gracePeriodHours == -1)
               return;
 
