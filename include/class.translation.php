@@ -765,7 +765,8 @@ class TextDomain {
             return;
 
         // Define locale for C-libraries
-        putenv('LC_ALL=' . $info['code']);
+        // VLS: putenv() has been disabled for security reasons on onebit hosting
+        //putenv('LC_ALL=' . $info['code']);
         self::setLocale(LC_ALL, $info['code']);
     }
 
