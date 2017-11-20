@@ -36,8 +36,6 @@ require_once(INCLUDE_DIR.'class.collaborator.php');
 require_once(INCLUDE_DIR.'class.task.php');
 require_once(INCLUDE_DIR.'class.faq.php');
 
-error_reporting(E_ERROR); ini_set('display_errors', 1);
-
 class TicketModel extends VerySimpleModel {
     static $meta = array(
         'table' => TICKET_TABLE,
