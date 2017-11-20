@@ -24,7 +24,8 @@ $sortOptions = array('name' => 'name',
                      'email' => 'emails__address',
                      'status' => 'account__status',
                      'create' => 'created',
-                     'update' => 'updated');
+                     'update' => 'updated',
+                     'org' => 'org__name');
 $orderWays = array('DESC'=>'-','ASC'=>'');
 $sort= ($_REQUEST['sort'] && $sortOptions[strtolower($_REQUEST['sort'])]) ? strtolower($_REQUEST['sort']) : 'name';
 //Sorting options...
@@ -56,7 +57,7 @@ $qstr.='&amp;order='.($order=='-' ? 'ASC' : 'DESC');
 $_SESSION[':Q:users'] = $users;
 
 $users->values('id', 'name', 'default_email__address', 'account__id',
-    'account__status', 'created', 'updated');
+    'account__status', 'created', 'updated', 'org__name');
 $users->order_by($order . $order_column);
 ?>
 <div id="basic_search">
@@ -155,12 +156,14 @@ else
             <th nowrap width="4%">&nbsp;</th>
             <th><a <?php echo $name_sort; ?> href="users.php?<?php
                 echo $qstr; ?>&sort=name"><?php echo __('Name'); ?></a></th>
-            <th width="22%"><a  <?php echo $status_sort; ?> href="users.php?<?php
+            <th width="20%"><a  <?php echo $status_sort; ?> href="users.php?<?php
                 echo $qstr; ?>&sort=status"><?php echo __('Status'); ?></a></th>
-            <th width="20%"><a <?php echo $create_sort; ?> href="users.php?<?php
+            <th width="15%"><a <?php echo $create_sort; ?> href="users.php?<?php
                 echo $qstr; ?>&sort=create"><?php echo __('Created'); ?></a></th>
-            <th width="20%"><a <?php echo $update_sort; ?> href="users.php?<?php
+            <th width="15%"><a <?php echo $update_sort; ?> href="users.php?<?php
                 echo $qstr; ?>&sort=update"><?php echo __('Updated'); ?></a></th>
+            <th width="20%"><a <?php echo $update_sort; ?> href="users.php?<?php
+                echo $qstr; ?>&sort=org"><?php echo __('Organization'); ?></a></th>
         </tr>
     </thead>
     <tbody>
@@ -202,6 +205,7 @@ else
                 <td><?php echo $status; ?></td>
                 <td><?php echo Format::date($U['created']); ?></td>
                 <td><?php echo Format::datetime($U['updated']); ?>&nbsp;</td>
+                <td><?php echo Format::htmlchars($U['org__name']); ?></td>
                </tr>
 <?php   } //end of foreach. ?>
     </tbody>
@@ -314,4 +318,3 @@ $(function() {
     });
 });
 </script>
-
