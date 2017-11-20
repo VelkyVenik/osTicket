@@ -591,7 +591,7 @@ implements RestrictedAccess, Threadable {
             continue;
           }
 
-          $waitingTime = $this->getWorkingHours($datePrevious->format('Y-m-d H:i:s'), $date->format('Y-m-d H:i:s'));
+          $waitingTime = $this->getWorkingHours($datePrevious, $date);
           // echo "$waitingTime / " . $date->diff($datePrevious)->format('%H:%i:%s') . "<br>";
           $customerWaitingTime += $waitingTime;
 
@@ -600,7 +600,7 @@ implements RestrictedAccess, Threadable {
         if ($type == "R") {
             // TODO: TimeZone... :(
             $now = new DateTime();
-            $waitingTime = $this->getWorkingHours($date->format('Y-m-d H:i:s'), $now->format('Y-m-d H:i:s'));
+            $waitingTime = $this->getWorkingHours($date, $now);
             // echo "$waitingTime / " . $now->diff($datePrevious)->format('%H:%i:%s') . "<br>";
             $customerWaitingTime += $waitingTime;
         }
@@ -609,16 +609,14 @@ implements RestrictedAccess, Threadable {
     }
 
     // change parameters to DateTime
-    function getWorkingHours($ini_str,$end_str){
+    function getWorkingHours($ini,$end){
         // echo "$ini_str -> $end_str<br>";
         //config
         $ini_time = [8,30]; //hr, min
         $end_time = [16,30]; //hr, min
         //date objects
-        $ini = date_create($ini_str);
-        $ini_wk = date_time_set(date_create($ini_str),$ini_time[0],$ini_time[1]);
-        $end = date_create($end_str);
-        $end_wk = date_time_set(date_create($end_str),$end_time[0],$end_time[1]);
+        $ini_wk = date_time_set($ini,$ini_time[0],$ini_time[1]);
+        $end_wk = date_time_set($end,$end_time[0],$end_time[1]);
         //days
         $workdays_arr = $this->getWorkingDays($ini,$end);
         $workdays_count = count($workdays_arr);
@@ -637,12 +635,7 @@ implements RestrictedAccess, Threadable {
         return $working_seconds / 60; //return minutes
     }
 
-    // TODO: same configuration for getWorkingHours and isWorkingDay
     function getWorkingDays($ini,$end){
-        //config
-        $skipdays = [6,0]; //saturday:6; sunday:0
-        $skipdates = []; //eg: ['2016-10-10'];
-
         //vars
         $current = clone $ini;
         $current_disp = $current->format('Y-m-d');
@@ -650,10 +643,10 @@ implements RestrictedAccess, Threadable {
         $days_arr = [];
         //days range
         while($current_disp <= $end_disp){
-            // TODO: =isWorkingDay ??
-            if(!in_array($current->format('w'),$skipdays) && !in_array($current_disp,$skipdates)){
+            if ($this->isWorkingDay($current)){
                 $days_arr[] = $current_disp;
             }
+
             $current->add(new DateInterval('P1D')); //adds one day
             $current_disp = $current->format('Y-m-d');
         }
@@ -661,25 +654,25 @@ implements RestrictedAccess, Threadable {
         return $days_arr;
     }
 
-    // TODO: same configuration for getWorkingHours and isWorkingDay
     function isWorkingDay($d) {
-        $dueDayOfWeek = $d->format('w');
-        $day = $d->format('d');
-        $month = $d->format('m');
+        // Configuration
+        //saturday:6; sunday:0
+        $skipDays = [6,0];
 
-        if ($dueDayOfWeek == 6)
-          return false;
+        //eg: ['DD-MM'];
+        $skipDates = ['01-01', '01-05', '08-05', '05-07', '06-07', '28-10',
+            '28-11', '17-11', '12-24', '12-25', '12-26'];
 
-        if ($dueDayOfWeek == 0)
-          return false;
+        $dateText = $d->format('d-m');
 
-        if ($day == 17 and $month == 11)
+        if(in_array($d->format('w'),$skipDays)) {
           return false;
-        if ($month == 12 and ($day == 24 or $day == 25 or $day == 26 or $day == 31))
-          return false;
+        }
 
-        if ($month == 1 and ($day == 1))
+
+        if (in_array($dateText,$skipDates)) {
           return false;
+        }
 
         return true;
     }
