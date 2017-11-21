@@ -3825,11 +3825,10 @@ class ThreadEntryWidget extends Widget {
         list($draft, $attrs) = Draft::getDraftAndDataAttrs($namespace, $object_id, $this->value);
         ?>
         <textarea style="width:100%;" name="<?php echo $this->field->get('name'); ?>"
-            placeholder="<?php echo Format::htmlchars($this->field->get('placeholder')); ?>"
             class="<?php if ($config['html']) echo 'richtext';
                 ?> draft draft-delete" <?php echo $attrs; ?>
-            cols="21" rows="8" style="width:80%;"><?php echo
-            Format::htmlchars($this->value) ?: $draft; ?></textarea>
+            cols="21" rows="8" style="width:80%;"><?php echo Format::htmlchars($this->field->get('placeholder'));
+            echo Format::htmlchars($this->value) ?: $draft; ?></textarea>
     <?php
         if (!$config['attachments'])
             return;
