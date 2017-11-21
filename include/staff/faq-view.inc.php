@@ -33,7 +33,24 @@ if ($thisstaff->hasPerm(FAQ::PERM_MANAGE)) { ?>
     <span class="faded">(<?php echo $category->isPublic()?__('Public'):__('Internal'); ?>)</span>
 </div>
 
-<div class="pull-right sidebar faq-meta">
+<div class="faq-content">
+
+<div class="faq-title flush-left"><?php echo $faq->getLocalQuestion() ?>
+</div>
+
+<div class="faded"><?php echo __('Last Updated');?>
+    <?php echo Format::relativeTime(Misc::db2gmtime($faq->getUpdateDate())); ?>
+</div>
+<br/>
+<div class="thread-body bleed">
+<?php echo $faq->getLocalAnswerWithImages(); ?>
+</div>
+
+</div>
+<div class="clear"></div>
+<hr>
+
+<div class="faq-content">
 <?php if ($attachments = $faq->getLocalAttachments()->all()) { ?>
 <section>
     <header><?php echo __('Attachments');?>:</header>
@@ -88,21 +105,6 @@ if ($otherLangs) { ?>
 
 </div>
 
-<div class="faq-content">
-
-
-<div class="faq-title flush-left"><?php echo $faq->getLocalQuestion() ?>
-</div>
-
-<div class="faded"><?php echo __('Last Updated');?>
-    <?php echo Format::relativeTime(Misc::db2gmtime($faq->getUpdateDate())); ?>
-</div>
-<br/>
-<div class="thread-body bleed">
-<?php echo $faq->getLocalAnswerWithImages(); ?>
-</div>
-
-</div>
 <div class="clear"></div>
 <hr>
 
