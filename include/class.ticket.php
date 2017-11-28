@@ -556,8 +556,12 @@ implements RestrictedAccess, Threadable {
             elseif ($gracePeriod != 'NBD')
                 $gracePeriod = "$gracePeriod h";
 
-            if ($this->getNumResponses() == 0)
+            if ($this->isClosed())
+                $type = "Solved";
+            elseif ($this->getNumResponses() == 0)
                 $type = "First Response";
+            elseif ($this->isAnswered())
+                $type = "Waiting for the Customer";
             else
                 $type = "Incident Update";
 
@@ -682,13 +686,8 @@ implements RestrictedAccess, Threadable {
     // VSL: exclude non working hours and days from SLA deadline
     // TODO: use est_duedate from DB if exists - after update do 0.10.1
     function getSLADueDate() {
-        if ($sla = $this->getSLA()) {
-
-          if ($this->isAnswered()) {
-            $dt = new DateTime(); // TODO: TZ :(
-          } else {
-            $dt = new DateTime($this->getLastMessageDate());
-          }
+        if ($sla = $this->getSLA() && !$this->isAnswered()) {
+          $dt = new DateTime($this->getLastMessageDate());
 
           $workStart = [8,30]; $workStartMinutes = $workStart[0]*60 + $workStart[1];
           $workEnd = [16,30]; $workEndMinutes = $workEnd[0]*60 + $workEnd[1];
