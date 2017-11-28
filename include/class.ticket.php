@@ -491,20 +491,20 @@ implements RestrictedAccess, Threadable {
     // VSL: Get correct Grace period, TODO: implement NBD
     function getSLAGracePeriod() {
         $slaGracePeriods = [
-            [ // Gold
-                [4, 4, 8], // First Response
-                [8, 8, -1], // Incident Resolution
-                [30*8, 60*8, -1] // Defect Resolution
+            [ // Gold, Critical, Major, Minor
+                [4, 8, 16], // First Response
+                [8, 8*5, -1], // Incindet Update
+                [10*8, 20*8, -1] // Defect Update
             ], // Gold
             [ // Silver
-                [8, 8, 5*8], // First Response
-                [3*8, 10*8, -1], // Incident Resolution
-                [30*8, 60*8, -1] // Defect Resolution
+                [8, 16, 5*8], // First Response
+                [2*8, 10*8, -1], // Incident Update
+                [20*8, 40*8, -1] // Defect Update
             ], // Silver
             [ // Basic
                 [5*8, 10*8, 15*8], // First Response
-                [60*8, -1, -1], // Incident Resolution
-                [120*8, -1, -1] // Defect Resolution
+                [5*8, -1, -1], // Incident Update
+                [-1, -1, -1] // Defect Update
             ] // Basic
         ];
         $priority = $this->getPriority();
@@ -557,7 +557,7 @@ implements RestrictedAccess, Threadable {
             if ($this->getNumResponses() == 0)
                 $type = "First Response";
             else
-                $type = "Incident Resolution";
+                $type = "Incident Update";
 
             return " - $type, $priority ($gracePeriod h)";
         } else {
@@ -660,8 +660,8 @@ implements RestrictedAccess, Threadable {
         $skipDays = [6,0];
 
         //eg: ['DD-MM'];
-        $skipDates = ['01-01', '01-05', '08-05', '05-07', '06-07', '28-10',
-            '28-11', '17-11', '12-24', '12-25', '12-26'];
+        $skipDates = ['01-01', '01-05', '08-05', '05-07', '06-07', '28-09',
+            '28-10', '17-11', '12-24', '12-25', '12-26'];
 
         $dateText = $d->format('d-m');
 
@@ -677,30 +677,36 @@ implements RestrictedAccess, Threadable {
         return true;
     }
 
-
     // VSL: exclude non working hours and days from SLA deadline
     // TODO: use est_duedate from DB if exists - after update do 0.10.1
     function getSLADueDate() {
         if ($sla = $this->getSLA()) {
-          $dt = new DateTime($this->getCreateDate());
+
+          if ($this->isAnswered()) {
+            $dt = new DateTime();
+          } else {
+            $dt = new DateTime($this->getLastMessageDate());
+          }
 
           $workStart = [8,30]; $workStartMinutes = $workStart[0]*60 + $workStart[1];
           $workEnd = [16,30]; $workEndMinutes = $workEnd[0]*60 + $workEnd[1];
 
-          $gracePeriodHours = $this->getSLAGracePeriod() + $this->getCustomerWaitingTime();
+          $gracePeriodHours = $this->getSLAGracePeriod();
           if ($gracePeriodHours == -1)
               return;
+
+          debug("-- Calculating bussines hours " . $dt->format('Y-m-d H:i:s') . " + " . $this->getSLAGracePeriod() . "h");
 
           $addMinutes = $gracePeriodHours * 60;
 
           $i = 1;
           while($addMinutes > 0) {
-              // echo "Loop $i: " . $dt->format('Y-m-d H:i:s') . ", $addMinutes\n<br>";$i++;
+              debug("Loop $i: " . $dt->format('Y-m-d H:i:s') . ", $addMinutes");$i++;
               $minutes = $dt->format('H') * 60  + $dt->format('i');
 
               // Skip non working day or hours to  day morning
               if (!$this->isWorkingDay($dt) or $minutes >= $workEndMinutes) {
-                  // echo "Non Working Day or Hour" . "\n<br>";
+                  debug(" * Non Working Day or Hour");
                   $dt->add(new DateInterval('P1D'));
                   $dt->setTime($workStart[0], $workStart[1]);
                   continue;
@@ -708,7 +714,7 @@ implements RestrictedAccess, Threadable {
 
               // skip to todays morning
               if ($minutes < $workStartMinutes) {
-                  // echo "Non Working Hour" . "\n<br>";
+                  debug(" * Non Working Hour");
                   $minutes = $dt->setTime($workStart[0], $workStart[1]);
                   continue;
               }
@@ -717,9 +723,11 @@ implements RestrictedAccess, Threadable {
               $minutesToday = $workEndMinutes - $minutes;
 
               if ($minutes + $addMinutes > $workEndMinutes) {
+                  debug(" * working $minutesToday minutes");
                   $addMinutes -= $minutesToday;
                   $dt->setTime($workEnd[0], $workEnd[1]);
               } else {
+                  debug(" * working $addMinutes minutes, and thats all");
                   $dt->add(new DateInterval('PT'. $addMinutes . 'M'));
                   $addMinutes = 0;
               }
@@ -3918,5 +3926,10 @@ implements RestrictedAccess, Threadable {
 
         require STAFFINC_DIR.'templates/tickets-actions.tmpl.php';
     }
+}
+
+function debug($msg) {
+  if ($_REQUEST['debug'] != '1') return;
+  echo $msg . "<br>\n";
 }
 ?>
