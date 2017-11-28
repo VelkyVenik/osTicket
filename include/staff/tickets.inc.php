@@ -193,8 +193,8 @@ case 'open':
     $results_type=__('Open Tickets');
     if (!$cfg->showAnsweredTickets())
         $tickets->filter(array('isanswered'=>0));
-    $queue_sort_options = array('priority,updated', 'updated',
-        'priority,due', 'due', 'priority,created', 'answered', 'number',
+    $queue_sort_options = array('due', 'priority,updated', 'updated',
+        'priority,due', 'priority,created', 'answered', 'number',
         'hot');
     break;
 }
@@ -657,4 +657,3 @@ $(function() {
     $('[data-toggle=tooltip]').tooltip();
 });
 </script>
-
