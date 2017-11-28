@@ -491,13 +491,13 @@ implements RestrictedAccess, Threadable {
     // VSL: Get correct Grace period, TODO: implement NBD
     function getSLAGracePeriod() {
         $slaGracePeriods = [
-            [ // Gold, Critical, Major, Minor
-                [4, 8, 16], // First Response
+            [ // Gold - Critical, Major, Minor
+                [4, 'NBD', 2*8], // First Response
                 [8, 8*5, -1], // Incindet Update
                 [10*8, 20*8, -1] // Defect Update
             ], // Gold
             [ // Silver
-                [8, 16, 5*8], // First Response
+                ['NBD', 16, 5*8], // First Response
                 [2*8, 10*8, -1], // Incident Update
                 [20*8, 40*8, -1] // Defect Update
             ], // Silver
@@ -553,13 +553,15 @@ implements RestrictedAccess, Threadable {
             $gracePeriod = $this->getSLAGracePeriod();
             if ($gracePeriod == -1)
                 $gracePeriod = 'n/a';
+            elseif ($gracePeriod != 'NBD')
+                $gracePeriod = "$gracePeriod h";
 
             if ($this->getNumResponses() == 0)
                 $type = "First Response";
             else
                 $type = "Incident Update";
 
-            return " - $type, $priority ($gracePeriod h)";
+            return " - $type, $priority ($gracePeriod)";
         } else {
             return "";
         }
@@ -683,7 +685,7 @@ implements RestrictedAccess, Threadable {
         if ($sla = $this->getSLA()) {
 
           if ($this->isAnswered()) {
-            $dt = new DateTime();
+            $dt = new DateTime(); // TODO: TZ :(
           } else {
             $dt = new DateTime($this->getLastMessageDate());
           }
@@ -692,6 +694,24 @@ implements RestrictedAccess, Threadable {
           $workEnd = [16,30]; $workEndMinutes = $workEnd[0]*60 + $workEnd[1];
 
           $gracePeriodHours = $this->getSLAGracePeriod();
+          // Next business day end of business - e.g. tomorrow 16:30
+          if ($gracePeriodHours == 'NBD') {
+              debug("-- Calculating Next Business Day");
+              $dt->add(new DateInterval('P1D'));
+              $dt->setTime($workEnd[0], $workEnd[1]);
+
+              $i = 1;
+              while(!$this->isWorkingDay($dt)) {
+                debug("Loop $i: " . $dt->format('Y-m-d H:i:s'));$i++;
+                $dt->add(new DateInterval('P1D'));
+              }
+
+              // TODO: save only if differs
+              $this->est_duedate = $dt->format('Y-m-d H:i:s');
+              $this->save();
+              return $this->est_duedate;
+          }
+
           if ($gracePeriodHours == -1)
               return;
 
