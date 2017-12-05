@@ -527,6 +527,7 @@ class FormField {
         /* @trans */ 'Basic Fields' => array(
             'text'  => array(   /* @trans */ 'Short Answer', 'TextboxField'),
             'memo' => array(    /* @trans */ 'Long Answer', 'TextareaField'),
+            'memo_template' => array(    /* @trans */ 'Long Template Answer', 'TextareaTemplateField'),
             'thread' => array(  /* @trans */ 'Thread Entry', 'ThreadEntryField', false),
             'datetime' => array(/* @trans */ 'Date and Time', 'DatetimeField'),
             'timezone' => array(/* @trans */ 'Timezone', 'TimezoneField'),
@@ -1408,6 +1409,34 @@ class TextareaField extends FormField {
             return $value;
     }
 
+}
+
+class TextareaTemplateField extends TextareaField {
+    static $widget = 'TextareaTemplateWidget';
+
+    function getConfigurationOptions() {
+        return array(
+            'cols'  =>  new TextboxField(array(
+                'id'=>1, 'label'=>__('Width').' '.__('(chars)'), 'required'=>true, 'default'=>40)),
+            'rows'  =>  new TextboxField(array(
+                'id'=>2, 'label'=>__('Height').' '.__('(rows)'), 'required'=>false, 'default'=>4)),
+            'length' => new TextboxField(array(
+                'id'=>3, 'label'=>__('Max Length'), 'required'=>false, 'default'=>0)),
+            'html' => new BooleanField(array(
+                'id'=>4, 'label'=>__('HTML'), 'required'=>false, 'default'=>true,
+                'configuration'=>array('desc'=>__('Allow HTML input in this box')))),
+            'placeholder' => new TextboxField(array(
+                'id'=>5, 'label'=>__('Placeholder'), 'required'=>false, 'default'=>'',
+                'hint'=>__('Text shown in before any input from the user'),
+                'configuration'=>array('size'=>40, 'length'=>40,
+                    'translatable'=>$this->getTranslateTag('placeholder')),
+            )),
+            'template' => new TextareaField(array(
+                'id'=>6, 'label'=>__('Template'), 'required'=>false, 'default'=>'',
+                'hint'=>__('Field Template'),
+                'configuration'=>array('rows'=>4)))
+        );
+    }
 }
 
 class PhoneField extends FormField {
@@ -3332,6 +3361,39 @@ class TextareaWidget extends Widget {
 
 }
 
+class TextareaTemplateWidget extends TextareaWidget {
+  function render($options=array()) {
+      $config = $this->field->getConfiguration();
+      $class = $cols = $rows = $maxlength = "";
+      $attrs = array();
+      if (isset($config['rows']))
+          $rows = "rows=\"{$config['rows']}\"";
+      if (isset($config['cols']))
+          $cols = "cols=\"{$config['cols']}\"";
+      if (isset($config['length']) && $config['length'])
+          $maxlength = "maxlength=\"{$config['length']}\"";
+      if (isset($config['html']) && $config['html']) {
+          $class = array('richtext', 'no-bar');
+          $class[] = @$config['size'] ?: 'small';
+          $class = sprintf('class="%s"', implode(' ', $class));
+          $this->value = Format::viewableImages($this->value);
+      }
+      if (isset($config['context']))
+          $attrs['data-root-context'] = '"'.$config['context'].'"';
+      ?>
+      <span style="display:inline-block;width:100%">
+      <textarea <?php echo $rows." ".$cols." ".$maxlength." ".$class
+              .' '.Format::array_implode('=', ' ', $attrs)
+              .' placeholder="'.$config['placeholder'].'"'; ?>
+          id="<?php echo $this->id; ?>"
+          name="<?php echo $this->name; ?>"><?php
+              echo Format::htmlchars($this->value ? $this->value : $config['template']);
+          ?></textarea>
+      </span>
+      <?php
+  }
+}
+
 class PhoneNumberWidget extends Widget {
     function render($options=array()) {
         $config = $this->field->getConfiguration();
@@ -3825,10 +3887,11 @@ class ThreadEntryWidget extends Widget {
         list($draft, $attrs) = Draft::getDraftAndDataAttrs($namespace, $object_id, $this->value);
         ?>
         <textarea style="width:100%;" name="<?php echo $this->field->get('name'); ?>"
+            placeholder="<?php echo Format::htmlchars($this->field->get('placeholder')); ?>"
             class="<?php if ($config['html']) echo 'richtext';
                 ?> draft draft-delete" <?php echo $attrs; ?>
-            cols="21" rows="8" style="width:80%;"><?php echo Format::htmlchars($this->field->get('placeholder'));
-            echo Format::htmlchars($this->value) ?: $draft; ?></textarea>
+            cols="21" rows="8" style="width:80%;"><?php echo
+            Format::htmlchars($this->value) ?: $draft; ?></textarea>
     <?php
         if (!$config['attachments'])
             return;
