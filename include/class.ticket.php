@@ -3924,7 +3924,7 @@ implements RestrictedAccess, Threadable {
                 ON (status.id=T1.status_id AND status.state="open") '
             .' LEFT JOIN '.SLA_TABLE.' T2 ON (T1.sla_id=T2.id AND T2.flags & 1 = 1) '
             .' WHERE isoverdue=0 '
-            .' AND ((duedate is NULL AND est_duedate is NOT NULL AND est_duedate<NOW()) '
+            .' AND ((duedate is NULL AND est_duedate is NOT NULL AND est_duedate<NOW() AND `isanswered` = 0) '
             .' OR (duedate is NOT NULL AND duedate<NOW()) '
             .' ) ORDER BY T1.created LIMIT 50'; //Age upto 50 tickets at a time?
 
